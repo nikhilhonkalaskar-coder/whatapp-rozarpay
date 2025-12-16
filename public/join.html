@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Join WhatsApp Community</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      display: flex;
+      height: 100vh;
+      justify-content: center;
+      align-items: center;
+      margin: 0;
+    }
+    .box {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+      width: 320px;
+    }
+    button {
+      background-color: #25d366;
+      border: none;
+      padding: 12px 20px;
+      color: white;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 20px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>Payment Successful ✅</h2>
+    <p>You can now join our WhatsApp Community</p>
+    <button id="joinBtn">Join WhatsApp Community</button>
+    <p style="font-size: 12px; margin-top: 10px;">Admin approval required</p>
+  </div>
+
+  <script>
+    // Get token from URL query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get("token");
+
+    // Store token in sessionStorage
+    if (token) {
+      sessionStorage.setItem("joinToken", token);
+    }
+
+    // Remove token from URL bar without reloading
+    const cleanUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, cleanUrl);
+
+    document.getElementById("joinBtn").addEventListener("click", () => {
+      const storedToken = sessionStorage.getItem("joinToken");
+      if (!storedToken) {
+        alert("Invalid session. Please contact support.");
+        return;
+      }
+
+      // Disable button to prevent multiple clicks
+      const btn = document.getElementById("joinBtn");
+      btn.disabled = true;
+      btn.textContent = "Processing...";
+
+      fetch("/mark-used", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ token: storedToken }),
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error("Invalid or used token");
+          // Redirect user to WhatsApp invite link
+          window.location.href = "https://chat.whatsapp.com/IY1uRr9PR2r630UaSDprSM "; // Your community link
+        })
+        .catch((err) => {
+          alert(err.message || "Error processing your request.");
+          btn.disabled = false;
+          btn.textContent = "Join WhatsApp Community";
+        });
+    });
+  </script>
+</body>
+</html>
