@@ -1,17 +1,17 @@
 {
   "name": "whatapp",
   "version": "1.0.0",
-  "description": "",
+  "description": "Razorpay to WhatsApp join app",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node app.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "body-parser": "^2.2.1",
-    "express": "^5.2.1"
+    "body-parser": "^1.20.2",
+    "express": "^4.19.2"
   }
 }
