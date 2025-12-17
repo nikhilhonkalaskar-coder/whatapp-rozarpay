@@ -8,14 +8,16 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // ================= CONFIG =================
-const RAZORPAY_WEBHOOK_SECRET = "Tbipl@123"; // same as Razorpay dashboard
-const REQUIRED_NOTE_KEY = "source";
-const REQUIRED_NOTE_VALUE = "TBI_COMMUNITY";
+const RAZORPAY_WEBHOOK_SECRET = "Tbipl@123";
+
+// 🔒 PAYMENT FILTER
+const ALLOWED_AMOUNT = 100; // ₹1
+const ALLOWED_CURRENCY = "INR";
 // ==========================================
 
-// In-memory stores (no DB)
-const validPayments = {}; // payment_id => true
-const tokens = {};        // token => used(true/false)
+// In-memory (no DB)
+const validPayments = {};
+const tokens = {};
 
 // ---------------- SIGNATURE VERIFY ----------------
 function verifySignature(req) {
@@ -36,49 +38,44 @@ function generateToken() {
 }
 
 // =================================================
-// 🔹 RAZORPAY WEBHOOK (ONLY TRUSTED ENTRY)
+// 🔹 WEBHOOK
 // =================================================
 app.post("/razorpay-webhook", (req, res) => {
   if (!verifySignature(req)) {
-    console.log("❌ Invalid webhook signature");
-    return res.status(400).send("Invalid signature");
+    console.log("❌ Invalid signature");
+    return res.sendStatus(400);
   }
 
   if (req.body.event === "payment.captured") {
     const payment = req.body.payload.payment.entity;
 
-    console.log("🔔 Payment received:", payment.id);
-    console.log("Notes:", payment.notes);
+    console.log("🔔 Payment:", payment.id);
+    console.log("Amount:", payment.amount, payment.currency);
 
-    // ✅ RELIABLE CHECK (NOT payment_page_id)
-    const notes = payment.notes || {};
-
-    if (notes[REQUIRED_NOTE_KEY] !== REQUIRED_NOTE_VALUE) {
-      console.log("❌ Ignored payment from other page");
+    // 🔐 WEAK BUT ACCEPTED CHECK
+    if (
+      payment.amount !== ALLOWED_AMOUNT ||
+      payment.currency !== ALLOWED_CURRENCY
+    ) {
+      console.log("❌ Payment does not match criteria");
       return res.sendStatus(200);
     }
 
-    // Mark payment valid
     validPayments[payment.id] = true;
-
-    console.log("✅ Valid payment accepted:", payment.id);
+    console.log("✅ Payment accepted:", payment.id);
   }
 
   res.sendStatus(200);
 });
 
 // =================================================
-// 🔹 PAYMENT SUCCESS REDIRECT
+// 🔹 SUCCESS REDIRECT
 // =================================================
 app.get("/payment-success", (req, res) => {
   const paymentId = req.query.razorpay_payment_id;
+  if (!paymentId) return res.status(400).send("Missing payment id");
 
-  if (!paymentId) {
-    return res.status(400).send("Missing payment id");
-  }
-
-  let attempts = 0;
-
+  let tries = 0;
   const interval = setInterval(() => {
     if (validPayments[paymentId]) {
       clearInterval(interval);
@@ -90,16 +87,16 @@ app.get("/payment-success", (req, res) => {
       return res.redirect(`/join?token=${token}`);
     }
 
-    attempts++;
-    if (attempts > 6) {
+    tries++;
+    if (tries > 6) {
       clearInterval(interval);
-      return res.status(403).send("Payment verification pending. Please refresh.");
+      return res.status(403).send("Verification pending. Refresh.");
     }
   }, 500);
 });
 
 // =================================================
-// 🔹 JOIN PAGE (ONE-TIME)
+// 🔹 JOIN PAGE (ONE TIME)
 // =================================================
 app.get("/join", (req, res) => {
   const token = req.query.token;
@@ -112,7 +109,7 @@ app.get("/join", (req, res) => {
 });
 
 // =================================================
-// 🔹 MARK TOKEN USED
+// 🔹 MARK USED
 // =================================================
 app.post("/mark-used", (req, res) => {
   const { token } = req.body;
