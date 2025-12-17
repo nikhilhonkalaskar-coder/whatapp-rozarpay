@@ -8,15 +8,16 @@ app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 // ================= CONFIG =================
-const RAZORPAY_WEBHOOK_SECRET = "Tbipl@123";
-const ALLOWED_PAGE_ID = "pl_RsbQ6W5Zf1EkzN"; // 🔒 ONLY THIS PAGE
+const RAZORPAY_WEBHOOK_SECRET = "Tbipl@123"; // same as Razorpay dashboard
+const REQUIRED_NOTE_KEY = "source";
+const REQUIRED_NOTE_VALUE = "TBI_COMMUNITY";
 // ==========================================
 
-// In-memory stores
+// In-memory stores (no DB)
 const validPayments = {}; // payment_id => true
-const tokens = {};        // token => used (true/false)
+const tokens = {};        // token => used(true/false)
 
-// Verify webhook signature
+// ---------------- SIGNATURE VERIFY ----------------
 function verifySignature(req) {
   const signature = req.headers["x-razorpay-signature"];
   const body = JSON.stringify(req.body);
@@ -29,44 +30,55 @@ function verifySignature(req) {
   return signature === expected;
 }
 
-// Generate token
+// ---------------- TOKEN ----------------
 function generateToken() {
   return crypto.randomBytes(20).toString("hex");
 }
 
-//
-// 🔹 WEBHOOK — ONLY TRUSTED ENTRY
-//
+// =================================================
+// 🔹 RAZORPAY WEBHOOK (ONLY TRUSTED ENTRY)
+// =================================================
 app.post("/razorpay-webhook", (req, res) => {
   if (!verifySignature(req)) {
+    console.log("❌ Invalid webhook signature");
     return res.status(400).send("Invalid signature");
   }
 
   if (req.body.event === "payment.captured") {
     const payment = req.body.payload.payment.entity;
 
-    // 🔐 VERY IMPORTANT CHECK
-    if (payment.payment_page_id !== ALLOWED_PAGE_ID) {
+    console.log("🔔 Payment received:", payment.id);
+    console.log("Notes:", payment.notes);
+
+    // ✅ RELIABLE CHECK (NOT payment_page_id)
+    const notes = payment.notes || {};
+
+    if (notes[REQUIRED_NOTE_KEY] !== REQUIRED_NOTE_VALUE) {
       console.log("❌ Ignored payment from other page");
       return res.sendStatus(200);
     }
 
-    // Mark payment as valid
+    // Mark payment valid
     validPayments[payment.id] = true;
 
-    console.log("✅ Valid payment from allowed page:", payment.id);
+    console.log("✅ Valid payment accepted:", payment.id);
   }
 
   res.sendStatus(200);
 });
 
-//
-// 🔹 SUCCESS REDIRECT (SECURE)
-//
+// =================================================
+// 🔹 PAYMENT SUCCESS REDIRECT
+// =================================================
 app.get("/payment-success", (req, res) => {
   const paymentId = req.query.razorpay_payment_id;
 
-  let tries = 0;
+  if (!paymentId) {
+    return res.status(400).send("Missing payment id");
+  }
+
+  let attempts = 0;
+
   const interval = setInterval(() => {
     if (validPayments[paymentId]) {
       clearInterval(interval);
@@ -74,33 +86,34 @@ app.get("/payment-success", (req, res) => {
 
       const token = generateToken();
       tokens[token] = false;
+
       return res.redirect(`/join?token=${token}`);
     }
 
-    tries++;
-    if (tries > 5) {
+    attempts++;
+    if (attempts > 6) {
       clearInterval(interval);
-      return res.status(403).send("Payment verification pending. Refresh.");
+      return res.status(403).send("Payment verification pending. Please refresh.");
     }
   }, 500);
 });
 
-//
-// 🔹 JOIN PAGE
-//
+// =================================================
+// 🔹 JOIN PAGE (ONE-TIME)
+// =================================================
 app.get("/join", (req, res) => {
   const token = req.query.token;
 
   if (!token || !(token in tokens) || tokens[token]) {
-    return res.send("<h2>Link expired or already used</h2>");
+    return res.send("<h2>❌ Link expired or already used</h2>");
   }
 
   res.sendFile(path.join(__dirname, "public", "join.html"));
 });
 
-//
+// =================================================
 // 🔹 MARK TOKEN USED
-//
+// =================================================
 app.post("/mark-used", (req, res) => {
   const { token } = req.body;
 
@@ -112,8 +125,7 @@ app.post("/mark-used", (req, res) => {
   res.sendStatus(200);
 });
 
+// =================================================
 app.listen(3000, () => {
-  console.log("Server running on port 3000");
+  console.log("🚀 Server running on port 3000");
 });
-
-
