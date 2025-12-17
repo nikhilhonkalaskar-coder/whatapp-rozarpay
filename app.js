@@ -9,7 +9,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // ================= CONFIG =================
 const RAZORPAY_WEBHOOK_SECRET = "Tbipl@123";
-const ALLOWED_PAGE_ID = "RsFOFpPKoCpO7r"; // 🔒 ONLY THIS PAGE
+const ALLOWED_PAGE_ID = "RsaF0UA2akFbqJ"; // 🔒 ONLY THIS PAGE
 // ==========================================
 
 // In-memory stores
@@ -115,3 +115,4 @@ app.post("/mark-used", (req, res) => {
 app.listen(3000, () => {
   console.log("Server running on port 3000");
 });
+
