@@ -88,15 +88,17 @@ app.get("/get-token", (req, res) => {
   for (const pid in paymentTokens) {
     const p = paymentTokens[pid];
 
-    // ⏱️ Expire after 5 minutes
+    // Expire tokens older than 5 minutes
     if (now - p.createdAt > 5 * 60 * 1000) {
       delete paymentTokens[pid];
       continue;
     }
 
     if (!p.used) {
-      p.used = true; // 🔒 lock immediately
-      return res.json({ token: p.token });
+      p.used = true;          // Mark as used
+      const token = p.token;
+      delete paymentTokens[pid];  // Immediately delete to expire
+      return res.json({ token });
     }
   }
 
@@ -139,3 +141,4 @@ setInterval(() => {
 app.listen(3000, () => {
   console.log("🚀 Server running on port 3000");
 });
+
