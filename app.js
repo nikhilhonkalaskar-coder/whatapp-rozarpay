@@ -72,17 +72,11 @@ app.post("/razorpay-webhook", (req, res) => {
 // 🔹 SUCCESS REDIRECT
 // =================================================
 app.get("/payment-success", (req, res) => {
-  const paymentId = req.query.razorpay_payment_id;
+  console.log("✅ payment-success hit");
 
-  if (!paymentId) {
-    return res.status(400).send("Missing payment id");
-  }
-
-  // Generate token immediately
+  // DO NOT expect razorpay_payment_id here
   const token = generateToken();
   tokens[token] = false;
-
-  console.log("➡️ Redirecting immediately for payment:", paymentId);
 
   return res.redirect(`/join?token=${token}`);
 });
@@ -176,5 +170,6 @@ app.post("/mark-used", (req, res) => {
 app.listen(3000, () => {
   console.log("🚀 Server running on port 3000");
 });
+
 
 
