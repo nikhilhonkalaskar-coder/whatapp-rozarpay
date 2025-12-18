@@ -74,98 +74,17 @@ app.post("/razorpay-webhook", (req, res) => {
 app.get("/payment-success", (req, res) => {
   const paymentId = req.query.razorpay_payment_id;
 
-  let tries = 0;
-  const interval = setInterval(() => {
-    if (validPayments[paymentId]) {
-      clearInterval(interval);
-      delete validPayments[paymentId];
+  if (!paymentId) {
+    return res.status(400).send("Missing payment id");
+  }
 
-      const token = generateToken();
-      tokens[token] = false;
-      return res.redirect(`/join?token=${token}`);
-    }
+  // Generate token immediately
+  const token = generateToken();
+  tokens[token] = false;
 
-    tries++;
-    if (tries > 5) {
-      clearInterval(interval);
-      return res.status(403).send(`
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-          <title>Payment Pending</title>
-          <style>
-            body {
-              margin: 0;
-              height: 100vh;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              background: #f4f6f9;
-              font-family: Arial, sans-serif;
-            }
+  console.log("➡️ Redirecting immediately for payment:", paymentId);
 
-            .status-box {
-              background: #ffffff;
-              padding: 22px 26px;
-              max-width: 90%;
-              width: 380px;
-              text-align: center;
-              border-radius: 14px;
-              box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            }
-
-            .status-box h2 {
-              margin: 0 0 12px;
-              color: #ff9800;
-              font-size: 22px;
-            }
-
-            .status-box p {
-              color: #555;
-              font-size: 15px;
-              line-height: 1.6;
-            }
-
-            .loader {
-              margin: 15px auto 0;
-              width: 40px;
-              height: 40px;
-              border: 4px solid #eee;
-              border-top: 4px solid #ff9800;
-              border-radius: 50%;
-              animation: spin 1s linear infinite;
-            }
-
-            @keyframes spin {
-              to { transform: rotate(360deg); }
-            }
-
-            @media (max-width: 480px) {
-              .status-box {
-                padding: 18px;
-              }
-              .status-box h2 {
-                font-size: 20px;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="status-box">
-            <h2>Payment Verification Pending</h2>
-            <p>
-              Your payment is still being verified.<br/>
-              Please refresh this page in a few seconds.
-            </p>
-            <div class="loader"></div>
-          </div>
-        </body>
-        </html>
-      `);
-    }
-  }, 500);
+  return res.redirect(`/join?token=${token}`);
 });
 
 // =================================================
@@ -257,4 +176,5 @@ app.post("/mark-used", (req, res) => {
 app.listen(3000, () => {
   console.log("🚀 Server running on port 3000");
 });
+
 
