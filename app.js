@@ -13,10 +13,12 @@ const ALLOWED_AMOUNT = 100; // ₹1 = 100 paise
 const ALLOWED_CURRENCY = "INR";
 // ==========================================
 
-// 🔐 paymentId => { token, used, createdAt }
+// 🔐 paymentId => { token, createdAt }
 const paymentTokens = {};
 
-// ---------------- SIGNATURE VERIFY ----------------
+// =================================================
+// 🔹 SIGNATURE VERIFY
+// =================================================
 function verifySignature(req) {
   const signature = req.headers["x-razorpay-signature"];
   const body = JSON.stringify(req.body);
@@ -29,9 +31,11 @@ function verifySignature(req) {
   return signature === expected;
 }
 
-// ---------------- TOKEN ----------------
+// =================================================
+// 🔹 TOKEN GENERATOR
+// =================================================
 function generateToken() {
-  return crypto.randomBytes(20).toString("hex");
+  return crypto.randomBytes(24).toString("hex");
 }
 
 // =================================================
@@ -43,44 +47,46 @@ app.post("/razorpay-webhook", (req, res) => {
     return res.sendStatus(400);
   }
 
-  if (req.body.event === "payment.captured") {
-    const payment = req.body.payload.payment.entity;
-
-    console.log("🔔 Payment received:", payment.id);
-    console.log("Amount:", payment.amount, payment.currency);
-
-    // ✅ Amount check
-    if (
-      payment.amount !== ALLOWED_AMOUNT ||
-      payment.currency !== ALLOWED_CURRENCY
-    ) {
-      console.log("❌ Payment does not match criteria");
-      return res.sendStatus(200);
-    }
-
-    // ✅ Create token ONLY HERE
-    const token = generateToken();
-    paymentTokens[payment.id] = {
-      token,
-      used: false,
-      createdAt: Date.now()
-    };
-
-    console.log("✅ Token created for payment:", payment.id);
+  if (req.body.event !== "payment.captured") {
+    return res.sendStatus(200);
   }
 
+  const payment = req.body.payload.payment.entity;
+
+  // ✅ Validate payment
+  if (
+    payment.amount !== ALLOWED_AMOUNT ||
+    payment.currency !== ALLOWED_CURRENCY
+  ) {
+    console.log("❌ Invalid payment amount/currency");
+    return res.sendStatus(200);
+  }
+
+  // ✅ Prevent duplicate token creation
+  if (paymentTokens[payment.id]) {
+    return res.sendStatus(200);
+  }
+
+  const token = generateToken();
+
+  paymentTokens[payment.id] = {
+    token,
+    createdAt: Date.now()
+  };
+
+  console.log("✅ Token created for payment:", payment.id);
   res.sendStatus(200);
 });
 
 // =================================================
-// 🔹 PAYMENT SUCCESS PAGE (NO TRUST)
+// 🔹 PAYMENT SUCCESS PAGE (UNTRUSTED)
 // =================================================
 app.get("/payment-success", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "verifying.html"));
 });
 
 // =================================================
-// 🔹 GET TOKEN (ONE TIME)
+// 🔹 GET TOKEN (NO EXPIRY HERE)
 // =================================================
 app.get("/get-token", (req, res) => {
   const now = Date.now();
@@ -88,45 +94,43 @@ app.get("/get-token", (req, res) => {
   for (const pid in paymentTokens) {
     const p = paymentTokens[pid];
 
-    // Expire tokens older than 5 minutes
+    // ⏱ Expire after 5 minutes
     if (now - p.createdAt > 5 * 60 * 1000) {
       delete paymentTokens[pid];
       continue;
     }
 
-    if (!p.used) {
-      p.used = true;          // Mark as used
-      const token = p.token;
-      delete paymentTokens[pid];  // Immediately delete to expire
-      return res.json({ token });
-    }
+    return res.json({ token: p.token });
   }
 
   res.json({});
 });
 
 // =================================================
-// 🔹 JOIN PAGE (ONE TIME)
+// 🔹 JOIN PAGE (EXPIRES TOKEN HERE)
 // =================================================
 app.get("/join", (req, res) => {
   const token = req.query.token;
-
   if (!token) {
     return res.send("<h2>❌ Invalid or missing token</h2>");
   }
 
-  const entry = Object.values(paymentTokens)
-    .find(p => p.token === token);
+  const pid = Object.keys(paymentTokens).find(
+    id => paymentTokens[id].token === token
+  );
 
-  if (!entry) {
+  if (!pid) {
     return res.send("<h2>❌ Link expired or invalid</h2>");
   }
+
+  // 🔒 EXPIRE IMMEDIATELY AFTER JOIN
+  delete paymentTokens[pid];
 
   res.sendFile(path.join(__dirname, "public", "join.html"));
 });
 
 // =================================================
-// 🔹 AUTO CLEANUP (OPTIONAL BUT GOOD)
+// 🔹 AUTO CLEANUP (EVERY 1 MIN)
 // =================================================
 setInterval(() => {
   const now = Date.now();
@@ -141,4 +145,3 @@ setInterval(() => {
 app.listen(3000, () => {
   console.log("🚀 Server running on port 3000");
 });
-
