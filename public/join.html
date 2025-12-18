@@ -2,93 +2,117 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Join WhatsApp Community</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <style>
+    * {
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      background: #f2f2f2;
-      display: flex;
-      height: 100vh;
-      justify-content: center;
-      align-items: center;
       margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #e9f7ef, #ffffff);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
     }
-    .box {
-      background: white;
-      padding: 30px;
-      border-radius: 10px;
-      text-align: center;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-      width: 320px;
-    }
-    button {
-      background-color: #25d366;
-      border: none;
-      padding: 12px 20px;
-      color: white;
-      font-size: 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      margin-top: 20px;
+
+    .card {
+      background: #fff;
       width: 100%;
+      max-width: 420px;
+      border-radius: 16px;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
+      padding: 28px 24px;
+      text-align: center;
+    }
+
+    .card h1 {
+      margin: 0 0 10px;
+      font-size: 24px;
+      color: #111;
+    }
+
+    .card p {
+      margin: 0 0 22px;
+      color: #555;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .whatsapp-btn {
+      display: block;
+      width: 100%;
+      padding: 14px 16px;
+      background: #25D366;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      text-decoration: none;
+      border-radius: 12px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .whatsapp-btn:active {
+      transform: scale(0.98);
+      box-shadow: 0 6px 18px rgba(37, 211, 102, 0.4);
+    }
+
+    .note {
+      margin-top: 16px;
+      font-size: 13px;
+      color: #888;
+    }
+
+    /* Mobile fine tuning */
+    @media (max-width: 420px) {
+      .card {
+        padding: 22px 18px;
+        border-radius: 14px;
+      }
+
+      .card h1 {
+        font-size: 22px;
+      }
+
+      .card p {
+        font-size: 14px;
+      }
+
+      .whatsapp-btn {
+        font-size: 15px;
+        padding: 13px;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="box">
-    <h2>Payment Successful ✅</h2>
-    <p>You can now join our WhatsApp Community</p>
-    <button id="joinBtn">Join WhatsApp Community</button>
-    <p style="font-size: 12px; margin-top: 10px;">Admin approval required</p>
+
+  <div class="card">
+    <h1>Welcome 🎉</h1>
+    <p>
+      Your payment was successful.<br />
+      Tap below to join our WhatsApp Community.
+    </p>
+
+    <!-- Replace with your real WhatsApp Community invite link -->
+    <a
+      class="whatsapp-btn"
+      href="https://chat.whatsapp.com/IecKZPsBd4WEO69eb6hJOy"
+      target="_blank"
+      rel="noopener"
+    >
+      Join WhatsApp Community
+    </a>
+
+    <div class="note">
+      This link works only once and cannot be shared.
+    </div>
   </div>
 
-  <script>
-    // Get token from URL query parameter
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get("token");
-
-    // Store token in sessionStorage
-    if (token) {
-      sessionStorage.setItem("joinToken", token);
-    }
-
-    // Remove token from URL bar without reloading
-    const cleanUrl = window.location.origin + window.location.pathname;
-    window.history.replaceState({}, document.title, cleanUrl);
-
-    document.getElementById("joinBtn").addEventListener("click", () => {
-      const storedToken = sessionStorage.getItem("joinToken");
-      if (!storedToken) {
-        alert("Invalid session. Please contact support.");
-        return;
-      }
-
-      // Disable button to prevent multiple clicks
-      const btn = document.getElementById("joinBtn");
-      btn.disabled = true;
-      btn.textContent = "Processing...";
-
-      fetch("/mark-used", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ token: storedToken }),
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error("Invalid or used token");
-          // Redirect user to WhatsApp invite link
-          window.location.href = "https://chat.whatsapp.com/IecKZPsBd4WEO69eb6hJOy"; // Your community link
-        })
-        .catch((err) => {
-          alert(err.message || "Error processing your request.");
-          btn.disabled = false;
-          btn.textContent = "Join WhatsApp Community";
-        });
-    });
-  </script>
 </body>
 </html>
-
-
