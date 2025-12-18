@@ -9,15 +9,12 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // ================= CONFIG =================
 const RAZORPAY_WEBHOOK_SECRET = "Tbipl@123";
-
-// 🔒 PAYMENT FILTER
 const ALLOWED_AMOUNT = 100; // ₹1
 const ALLOWED_CURRENCY = "INR";
 // ==========================================
 
-// In-memory (no DB)
-const validPayments = {};
-const tokens = {};
+// paymentId => { token, used, createdAt }
+const paymentTokens = {};
 
 // ---------------- SIGNATURE VERIFY ----------------
 function verifySignature(req) {
@@ -38,7 +35,7 @@ function generateToken() {
 }
 
 // =================================================
-// 🔹 WEBHOOK
+// 🔹 RAZORPAY WEBHOOK (ONLY TRUSTED ENTRY)
 // =================================================
 app.post("/razorpay-webhook", (req, res) => {
   if (!verifySignature(req)) {
@@ -52,33 +49,55 @@ app.post("/razorpay-webhook", (req, res) => {
     console.log("🔔 Payment:", payment.id);
     console.log("Amount:", payment.amount, payment.currency);
 
-    // 🔐 WEAK BUT ACCEPTED CHECK
     if (
       payment.amount !== ALLOWED_AMOUNT ||
       payment.currency !== ALLOWED_CURRENCY
     ) {
-      console.log("❌ Payment does not match criteria");
+      console.log("❌ Amount mismatch");
       return res.sendStatus(200);
     }
 
-    validPayments[payment.id] = true;
-    console.log("✅ Payment accepted:", payment.id);
+    // 🔐 CREATE TOKEN ONLY HERE
+    paymentTokens[payment.id] = {
+      token: generateToken(),
+      used: false,
+      createdAt: Date.now()
+    };
+
+    console.log("✅ Token created for payment:", payment.id);
   }
 
   res.sendStatus(200);
 });
 
 // =================================================
-// 🔹 SUCCESS REDIRECT
+// 🔹 PAYMENT SUCCESS PAGE (NO TOKEN CREATION)
 // =================================================
 app.get("/payment-success", (req, res) => {
-  console.log("✅ payment-success hit");
+  // Just show verifying UI
+  res.sendFile(path.join(__dirname, "public", "verifying.html"));
+});
 
-  // DO NOT expect razorpay_payment_id here
-  const token = generateToken();
-  tokens[token] = false;
+// =================================================
+// 🔹 FRONTEND POLLS THIS
+// =================================================
+app.get("/get-token", (req, res) => {
+  for (const pid in paymentTokens) {
+    const p = paymentTokens[pid];
 
-  return res.redirect(`/join?token=${token}`);
+    // ⏳ expire after 5 minutes
+    if (Date.now() - p.createdAt > 5 * 60 * 1000) {
+      delete paymentTokens[pid];
+      continue;
+    }
+
+    if (!p.used) {
+      p.used = true; // 🔒 lock token
+      return res.json({ token: p.token });
+    }
+  }
+
+  res.json({});
 });
 
 // =================================================
@@ -153,23 +172,6 @@ app.get("/join", (req, res) => {
 });
 
 // =================================================
-// 🔹 MARK USED
-// =================================================
-app.post("/mark-used", (req, res) => {
-  const { token } = req.body;
-
-  if (!token || !(token in tokens) || tokens[token]) {
-    return res.status(400).send("Invalid token");
-  }
-
-  tokens[token] = true;
-  res.sendStatus(200);
-});
-
-// =================================================
 app.listen(3000, () => {
   console.log("🚀 Server running on port 3000");
 });
-
-
-
