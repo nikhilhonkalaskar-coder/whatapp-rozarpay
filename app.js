@@ -9,11 +9,11 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // ================= CONFIG =================
 const RAZORPAY_WEBHOOK_SECRET = "Tbipl@123";
-const ALLOWED_AMOUNT = 100; // ₹1
+const ALLOWED_AMOUNT = 100; // ₹1 = 100 paise
 const ALLOWED_CURRENCY = "INR";
 // ==========================================
 
-// paymentId => { token, used, createdAt }
+// 🔐 paymentId => { token, used, createdAt }
 const paymentTokens = {};
 
 // ---------------- SIGNATURE VERIFY ----------------
@@ -39,27 +39,29 @@ function generateToken() {
 // =================================================
 app.post("/razorpay-webhook", (req, res) => {
   if (!verifySignature(req)) {
-    console.log("❌ Invalid signature");
+    console.log("❌ Invalid webhook signature");
     return res.sendStatus(400);
   }
 
   if (req.body.event === "payment.captured") {
     const payment = req.body.payload.payment.entity;
 
-    console.log("🔔 Payment:", payment.id);
+    console.log("🔔 Payment received:", payment.id);
     console.log("Amount:", payment.amount, payment.currency);
 
+    // ✅ Amount check
     if (
       payment.amount !== ALLOWED_AMOUNT ||
       payment.currency !== ALLOWED_CURRENCY
     ) {
-      console.log("❌ Amount mismatch");
+      console.log("❌ Payment does not match criteria");
       return res.sendStatus(200);
     }
 
-    // 🔐 CREATE TOKEN ONLY HERE
+    // ✅ Create token ONLY HERE
+    const token = generateToken();
     paymentTokens[payment.id] = {
-      token: generateToken(),
+      token,
       used: false,
       createdAt: Date.now()
     };
@@ -71,28 +73,29 @@ app.post("/razorpay-webhook", (req, res) => {
 });
 
 // =================================================
-// 🔹 PAYMENT SUCCESS PAGE (NO TOKEN CREATION)
+// 🔹 PAYMENT SUCCESS PAGE (NO TRUST)
 // =================================================
 app.get("/payment-success", (req, res) => {
-  // Just show verifying UI
   res.sendFile(path.join(__dirname, "public", "verifying.html"));
 });
 
 // =================================================
-// 🔹 FRONTEND POLLS THIS
+// 🔹 GET TOKEN (ONE TIME)
 // =================================================
 app.get("/get-token", (req, res) => {
+  const now = Date.now();
+
   for (const pid in paymentTokens) {
     const p = paymentTokens[pid];
 
-    // ⏳ expire after 5 minutes
-    if (Date.now() - p.createdAt > 5 * 60 * 1000) {
+    // ⏱️ Expire after 5 minutes
+    if (now - p.createdAt > 5 * 60 * 1000) {
       delete paymentTokens[pid];
       continue;
     }
 
     if (!p.used) {
-      p.used = true; // 🔒 lock token
+      p.used = true; // 🔒 lock immediately
       return res.json({ token: p.token });
     }
   }
@@ -106,70 +109,31 @@ app.get("/get-token", (req, res) => {
 app.get("/join", (req, res) => {
   const token = req.query.token;
 
-  if (!token || !(token in tokens) || tokens[token]) {
-    return res.send(`
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Link Expired</title>
-        <style>
-          body {
-            margin: 0;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: #f4f6f9;
-            font-family: Arial, sans-serif;
-          }
+  if (!token) {
+    return res.send("<h2>❌ Invalid or missing token</h2>");
+  }
 
-          .error-box {
-            background: #ffffff;
-            padding: 20px 25px;
-            max-width: 90%;
-            width: 360px;
-            text-align: center;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-          }
+  const entry = Object.values(paymentTokens)
+    .find(p => p.token === token);
 
-          .error-box h2 {
-            margin: 0 0 10px;
-            color: #dc3545;
-            font-size: 22px;
-          }
-
-          .error-box p {
-            color: #555;
-            font-size: 15px;
-            line-height: 1.5;
-          }
-
-          @media (max-width: 480px) {
-            .error-box {
-              padding: 16px;
-            }
-
-            .error-box h2 {
-              font-size: 20px;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="error-box">
-          <h2>Link Expired</h2>
-          <p>This invite link has already been used or is no longer valid.</p>
-        </div>
-      </body>
-      </html>
-    `);
+  if (!entry) {
+    return res.send("<h2>❌ Link expired or invalid</h2>");
   }
 
   res.sendFile(path.join(__dirname, "public", "join.html"));
 });
+
+// =================================================
+// 🔹 AUTO CLEANUP (OPTIONAL BUT GOOD)
+// =================================================
+setInterval(() => {
+  const now = Date.now();
+  for (const pid in paymentTokens) {
+    if (now - paymentTokens[pid].createdAt > 5 * 60 * 1000) {
+      delete paymentTokens[pid];
+    }
+  }
+}, 60 * 1000);
 
 // =================================================
 app.listen(3000, () => {
