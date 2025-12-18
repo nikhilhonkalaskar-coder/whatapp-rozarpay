@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Verifying Payment</title>
+</head>
+<body>
+  <h2>Verifying your payment…</h2>
+
+  <script>
+    async function check() {
+      const res = await fetch("/get-token");
+      const data = await res.json();
+
+      if (data.token) {
+        window.location.href = "/join?token=" + data.token;
+      }
+    }
+
+    setInterval(check, 1500);
+  </script>
+</body>
+</html>
