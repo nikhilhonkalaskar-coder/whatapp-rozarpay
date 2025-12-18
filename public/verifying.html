@@ -6,20 +6,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
-      height: 100vh;
+      min-height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
       background: #f4f6f9;
       font-family: Arial, sans-serif;
+      padding: 16px;
     }
 
     .box {
       background: #ffffff;
       padding: 24px 26px;
-      max-width: 90%;
+      max-width: 100%;
       width: 360px;
       text-align: center;
       border-radius: 14px;
@@ -30,9 +35,11 @@
       margin: 0 0 12px;
       color: #333;
       font-size: 22px;
+      font-weight: 600;
     }
 
     .box p {
+      margin: 0;
       color: #555;
       font-size: 15px;
       line-height: 1.6;
@@ -43,13 +50,15 @@
       width: 40px;
       height: 40px;
       border: 4px solid #eee;
-      border-top: 4px solid #25D366;
+      border-top-color: #25D366;
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
 
     @keyframes spin {
-      to { transform: rotate(360deg); }
+      to {
+        transform: rotate(360deg);
+      }
     }
   </style>
 </head>
@@ -57,21 +66,35 @@
 
   <div class="box">
     <h2>Verifying Payment</h2>
-    <p>Please wait while we confirm your payment.</p>
+    <p id="status">Please wait while we confirm your payment.</p>
     <div class="loader"></div>
   </div>
 
   <script>
+    let redirected = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 20; // ~30 seconds
+
     async function check() {
+      if (redirected) return;
+
+      attempts++;
+      if (attempts > MAX_ATTEMPTS) {
+        document.getElementById("status").innerText =
+          "⚠️ Verification taking longer than expected. Please refresh.";
+        return;
+      }
+
       try {
-        const res = await fetch("/get-token");
+        const res = await fetch("/get-token", { cache: "no-store" });
         const data = await res.json();
 
         if (data.token) {
+          redirected = true;
           window.location.href = "/join?token=" + data.token;
         }
-      } catch (e) {
-        console.error(e);
+      } catch (err) {
+        console.error(err);
       }
     }
 
