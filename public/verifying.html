@@ -70,36 +70,41 @@
     <div class="loader"></div>
   </div>
 
-  <script>
-    let redirected = false;
-    let attempts = 0;
-    const MAX_ATTEMPTS = 20; // ~30 seconds
+ <script>
+  let redirected = false;
+  let attempts = 0;
 
-    async function check() {
-      if (redirected) return;
+  const INTERVAL = 250;        // 🚀 ultra-fast polling
+  const MAX_TIME = 15000;     // 15 seconds max
 
-      attempts++;
-      if (attempts > MAX_ATTEMPTS) {
-        document.getElementById("status").innerText =
-          "⚠️ Verification taking longer than expected. Please refresh.";
-        return;
-      }
+  const start = Date.now();
 
-      try {
-        const res = await fetch("/get-token", { cache: "no-store" });
-        const data = await res.json();
+  async function check() {
+    if (redirected) return;
 
-        if (data.token) {
-          redirected = true;
-          window.location.href = "/join?token=" + data.token;
-        }
-      } catch (err) {
-        console.error(err);
-      }
+    if (Date.now() - start > MAX_TIME) {
+      document.getElementById("status").innerText =
+        "⚠️ Verification taking longer than expected. Please refresh.";
+      return;
     }
 
-    setInterval(check, 1500);
-  </script>
+    try {
+      const res = await fetch("/get-token", { cache: "no-store" });
+      const data = await res.json();
+
+      if (data.token) {
+        redirected = true;
+
+        // 🚀 faster redirect (no history)
+        location.replace("/join?token=" + data.token);
+      }
+    } catch {}
+  }
+
+  setInterval(check, INTERVAL);
+</script>
+
 
 </body>
 </html>
+
