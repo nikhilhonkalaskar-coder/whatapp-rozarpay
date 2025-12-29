@@ -9,7 +9,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // ================= CONFIG =================
 const RAZORPAY_WEBHOOK_SECRET = "Tbipl@123";
-const ALLOWED_AMOUNT = 100; // ₹1 = 100 paise
+const ALLOWED_AMOUNT = 9900; // ₹99 = 9900 paise
 const ALLOWED_CURRENCY = "INR";
 // ==========================================
 
@@ -145,3 +145,4 @@ setInterval(() => {
 app.listen(3000, () => {
   console.log("🚀 Server running on port 3000");
 });
+
