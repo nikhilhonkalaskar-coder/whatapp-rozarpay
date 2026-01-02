@@ -17,7 +17,7 @@ const ALLOWED_CURRENCY = "INR";
 const paymentTokens = {};
 
 // =================================================
-// 🔹 SIGNATURE VERIFY
+// 🔹 SIGNATURE VERIFY (SECURE)
 // =================================================
 function verifySignature(req) {
   const signature = req.headers["x-razorpay-signature"];
@@ -39,7 +39,7 @@ function generateToken() {
 }
 
 // =================================================
-// 🔹 RAZORPAY WEBHOOK (ONLY TRUSTED ENTRY)
+// 🔹 RAZORPAY WEBHOOK (TRUSTED ENTRY POINT)
 // =================================================
 app.post("/razorpay-webhook", (req, res) => {
   if (!verifySignature(req)) {
@@ -58,15 +58,50 @@ app.post("/razorpay-webhook", (req, res) => {
     payment.amount !== ALLOWED_AMOUNT ||
     payment.currency !== ALLOWED_CURRENCY
   ) {
-    console.log("❌ Invalid payment amount/currency");
+    console.log("❌ Invalid payment amount or currency");
     return res.sendStatus(200);
   }
 
-  // ✅ Prevent duplicate token creation
+  // ✅ Prevent duplicate processing
   if (paymentTokens[payment.id]) {
     return res.sendStatus(200);
   }
 
+  // =================================================
+  // ⏰ PAYMENT TIME → ASIA/KOLKATA (IST)
+  // =================================================
+  const paymentTimeIST = new Date(payment.created_at * 1000).toLocaleString(
+    "en-IN",
+    { timeZone: "Asia/Kolkata" }
+  );
+
+  // =================================================
+  // 🔹 USER DETAILS
+  // =================================================
+  const userDetails = {
+    paymentId: payment.id,
+    name: payment.notes?.name || "N/A",
+    email: payment.email || "N/A",
+    phone: payment.contact || "N/A",
+    city: payment.notes?.city || "N/A",
+    amount: payment.amount / 100 + " INR",
+    paymentTime: paymentTimeIST
+  };
+
+  console.log("======================================");
+  console.log("💰 NEW PAYMENT RECEIVED");
+  console.log("👤 Name        :", userDetails.name);
+  console.log("📧 Email       :", userDetails.email);
+  console.log("📞 Phone       :", userDetails.phone);
+  console.log("🏙 City        :", userDetails.city);
+  console.log("💵 Amount      :", userDetails.amount);
+  console.log("🆔 Payment ID  :", userDetails.paymentId);
+  console.log("⏰ Time (IST)  :", userDetails.paymentTime);
+  console.log("======================================");
+
+  // =================================================
+  // 🔹 TOKEN GENERATION
+  // =================================================
   const token = generateToken();
 
   paymentTokens[payment.id] = {
@@ -74,19 +109,20 @@ app.post("/razorpay-webhook", (req, res) => {
     createdAt: Date.now()
   };
 
-  console.log("✅ Token created for payment:", payment.id);
+  console.log("✅ One-time token created:", token);
+
   res.sendStatus(200);
 });
 
 // =================================================
-// 🔹 PAYMENT SUCCESS PAGE (UNTRUSTED)
+// 🔹 PAYMENT SUCCESS PAGE
 // =================================================
 app.get("/payment-success", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "verifying.html"));
 });
 
 // =================================================
-// 🔹 GET TOKEN (NO EXPIRY HERE)
+// 🔹 GET TOKEN (FRONTEND POLLING)
 // =================================================
 app.get("/get-token", (req, res) => {
   const now = Date.now();
@@ -107,7 +143,7 @@ app.get("/get-token", (req, res) => {
 });
 
 // =================================================
-// 🔹 JOIN PAGE (EXPIRES TOKEN HERE)
+// 🔹 JOIN PAGE (TOKEN EXPIRES HERE)
 // =================================================
 app.get("/join", (req, res) => {
   const token = req.query.token;
@@ -123,7 +159,7 @@ app.get("/join", (req, res) => {
     return res.send("<h2>❌ Link expired or invalid</h2>");
   }
 
-  // 🔒 EXPIRE IMMEDIATELY AFTER JOIN
+  // 🔒 Expire token immediately
   delete paymentTokens[pid];
 
   res.sendFile(path.join(__dirname, "public", "join.html"));
@@ -145,7 +181,3 @@ setInterval(() => {
 app.listen(3000, () => {
   console.log("🚀 Server running on port 3000");
 });
-
-
-
-
