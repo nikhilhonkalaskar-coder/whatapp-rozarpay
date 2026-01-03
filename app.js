@@ -7,39 +7,49 @@ const app = express();
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// ================= CONFIG =================
+// =================================================
+// 🔧 CONFIG
+// =================================================
 const RAZORPAY_WEBHOOK_SECRET = "Tbipl@123";
-const ALLOWED_AMOUNT = 9600; // ₹96 = 9600 paise
 const ALLOWED_CURRENCY = "INR";
-// ==========================================
 
-// 🔐 paymentId => { token, createdAt }
+const PLANS = {
+  9600: {
+    whatsapp: "https://chat.whatsapp.com/L49jAfY1CltBXXcUQNL9KU",
+    event: "10 January Webinar"
+  },
+  9900: {
+    whatsapp: "https://chat.whatsapp.com/HCAvvC1okgsGigsZZM0krm",
+    event: "4 January Seminar"
+  }
+};
+
+// paymentId => { token, whatsapp, user, createdAt }
 const paymentTokens = {};
 
 // =================================================
-// 🔹 SIGNATURE VERIFY (SECURE)
+// 🔐 VERIFY WEBHOOK SIGNATURE
 // =================================================
 function verifySignature(req) {
   const signature = req.headers["x-razorpay-signature"];
-  const body = JSON.stringify(req.body);
 
   const expected = crypto
     .createHmac("sha256", RAZORPAY_WEBHOOK_SECRET)
-    .update(body)
+    .update(JSON.stringify(req.body))
     .digest("hex");
 
   return signature === expected;
 }
 
 // =================================================
-// 🔹 TOKEN GENERATOR
+// 🔑 TOKEN GENERATOR
 // =================================================
 function generateToken() {
   return crypto.randomBytes(24).toString("hex");
 }
 
 // =================================================
-// 🔹 RAZORPAY WEBHOOK (TRUSTED ENTRY POINT)
+// 🔹 RAZORPAY WEBHOOK (TRUSTED ENTRY)
 // =================================================
 app.post("/razorpay-webhook", (req, res) => {
   if (!verifySignature(req)) {
@@ -52,23 +62,20 @@ app.post("/razorpay-webhook", (req, res) => {
   }
 
   const payment = req.body.payload.payment.entity;
+  const plan = PLANS[payment.amount];
 
-  // ✅ Validate payment
-  if (
-    payment.amount !== ALLOWED_AMOUNT ||
-    payment.currency !== ALLOWED_CURRENCY
-  ) {
+  if (!plan || payment.currency !== ALLOWED_CURRENCY) {
     console.log("❌ Invalid payment amount or currency");
     return res.sendStatus(200);
   }
 
-  // ✅ Prevent duplicate processing
+  // Prevent duplicate processing
   if (paymentTokens[payment.id]) {
     return res.sendStatus(200);
   }
 
   // =================================================
-  // ⏰ PAYMENT TIME → ASIA/KOLKATA (IST)
+  // ⏰ PAYMENT TIME → IST
   // =================================================
   const paymentTimeIST = new Date(payment.created_at * 1000).toLocaleString(
     "en-IN",
@@ -76,7 +83,7 @@ app.post("/razorpay-webhook", (req, res) => {
   );
 
   // =================================================
-  // 🔹 USER DETAILS
+  // 👤 USER DETAILS
   // =================================================
   const userDetails = {
     paymentId: payment.id,
@@ -85,7 +92,8 @@ app.post("/razorpay-webhook", (req, res) => {
     phone: payment.contact || "N/A",
     city: payment.notes?.city || "N/A",
     amount: payment.amount / 100 + " INR",
-    paymentTime: paymentTimeIST
+    paymentTime: paymentTimeIST,
+    event: plan.event
   };
 
   console.log("======================================");
@@ -96,21 +104,23 @@ app.post("/razorpay-webhook", (req, res) => {
   console.log("🏙 City        :", userDetails.city);
   console.log("💵 Amount      :", userDetails.amount);
   console.log("🆔 Payment ID  :", userDetails.paymentId);
+  console.log("📦 Event       :", userDetails.event);
   console.log("⏰ Time (IST)  :", userDetails.paymentTime);
   console.log("======================================");
 
   // =================================================
-  // 🔹 TOKEN GENERATION
+  // 🔑 CREATE ONE-TIME TOKEN
   // =================================================
   const token = generateToken();
 
   paymentTokens[payment.id] = {
     token,
+    whatsapp: plan.whatsapp,
+    user: userDetails,
     createdAt: Date.now()
   };
 
   console.log("✅ One-time token created:", token);
-
   res.sendStatus(200);
 });
 
@@ -122,46 +132,54 @@ app.get("/payment-success", (req, res) => {
 });
 
 // =================================================
-// 🔹 GET TOKEN (FRONTEND POLLING)
+// 🔹 FRONTEND POLLING FOR TOKEN
 // =================================================
 app.get("/get-token", (req, res) => {
   const now = Date.now();
 
   for (const pid in paymentTokens) {
-    const p = paymentTokens[pid];
+    const data = paymentTokens[pid];
 
-    // ⏱ Expire after 5 minutes
-    if (now - p.createdAt > 5 * 60 * 1000) {
+    if (now - data.createdAt > 5 * 60 * 1000) {
       delete paymentTokens[pid];
       continue;
     }
 
-    return res.json({ token: p.token });
+    return res.json({ token: data.token });
   }
 
   res.json({});
 });
 
 // =================================================
-// 🔹 JOIN PAGE (TOKEN EXPIRES HERE)
+// 🔹 VERIFY TOKEN (SEND WHATSAPP + USER DATA)
 // =================================================
-app.get("/join", (req, res) => {
+app.get("/verify-token", (req, res) => {
   const token = req.query.token;
-  if (!token) {
-    return res.send("<h2>❌ Invalid or missing token</h2>");
-  }
 
   const pid = Object.keys(paymentTokens).find(
     id => paymentTokens[id].token === token
   );
 
   if (!pid) {
-    return res.send("<h2>❌ Link expired or invalid</h2>");
+    return res.status(401).json({ error: "INVALID_OR_EXPIRED_TOKEN" });
   }
 
-  // 🔒 Expire token immediately
+  const data = paymentTokens[pid];
+
+  // 🔒 One-time use
   delete paymentTokens[pid];
 
+  res.json({
+    whatsapp: data.whatsapp,
+    user: data.user
+  });
+});
+
+// =================================================
+// 🔹 JOIN PAGE (SINGLE HTML FILE)
+// =================================================
+app.get("/join", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "join.html"));
 });
 
